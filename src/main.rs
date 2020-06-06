@@ -1,13 +1,23 @@
-use std::{error::Error, thread, time};
+use std::error::Error;
 
 use ncurses::*;
 use rand::prelude::*;
 
 struct Player<'b> {
-    col: i32,
-    lin: i32,
+    col: usize,
+    lin: usize,
     is_alive: bool,
     repr: &'b str,
+}
+
+impl<'b> Player<'b> {
+    fn move_position(&mut self, pos: i32) {
+        match pos {
+            KEY_LEFT => self.col = if self.col <= 1 { 1 } else { self.col - 1 },
+            KEY_RIGHT => self.col = if self.col >= 3 { 3 } else { self.col + 1 },
+            _ => {}
+        }
+    }
 }
 
 impl<'b> Default for Player<'b> {
@@ -22,8 +32,8 @@ impl<'b> Default for Player<'b> {
 }
 
 struct Enemy<'a> {
-    col: i32,
-    lin: i32,
+    col: usize,
+    lin: usize,
     repr: &'a str,
 }
 
@@ -63,7 +73,7 @@ impl<'c> World<'c> {
     fn draw_field(
         &self,
         field: &Vec<&str>,
-        line: i32,
+        line: usize,
         player: &mut Player,
         enemy: &Enemy,
     ) -> Result<String, Box<dyn Error>> {
@@ -71,12 +81,10 @@ impl<'c> World<'c> {
             .iter()
             .enumerate()
             .map(|(f, n)| {
-                if ((line as i32) == player.lin)
-                    && ((f as i32) == player.col)
-                    && (player.col >= 1 && player.col <= 3)
+                if (line == player.lin) && (f == player.col) && (player.col >= 1 && player.col <= 3)
                 {
                     player.repr
-                } else if line as i32 == enemy.lin && f as i32 == enemy.col {
+                } else if line == enemy.lin && f == enemy.col {
                     enemy.repr
                 } else if enemy.lin == player.lin && enemy.col == player.col {
                     player.is_alive = false;
@@ -92,11 +100,7 @@ impl<'c> World<'c> {
 
     fn draw_road(&self, player: &mut Player, enemy: &Enemy) -> Result<(), Box<dyn Error>> {
         for (i, field) in self.road.iter().enumerate() {
-            mvaddstr(
-                i as i32,
-                0,
-                &self.draw_field(field, i as i32, player, enemy)?,
-            );
+            mvaddstr(i as i32, 0, &self.draw_field(field, i, player, enemy)?);
         }
         Ok(())
     }
@@ -104,8 +108,8 @@ impl<'c> World<'c> {
 
 struct GameState<'a, 'b, 'c> {
     is_alive: bool,
-    score: i32,
-    enemy_line: i32,
+    score: usize,
+    enemy_line: usize,
     rng: ThreadRng,
     player: Player<'b>,
     enemy: Enemy<'a>,
@@ -130,42 +134,28 @@ impl<'a, 'b, 'c> GameState<'a, 'b, 'c> {
         if self.enemy_line == 0 {
             self.enemy.col = self.rng.gen_range(1, 4);
         }
-        if !self.player.is_alive {
-            self.is_alive = false;
-        }
-        if self.enemy_line == 10 && self.player.is_alive {
+        self.is_alive = self.player.is_alive;
+        if self.enemy_line == self.world.road.len() && self.is_alive {
             self.score += 1
         }
-        mvprintw(LINES() - 1, 0, &format!("score: {}", self.score));
+        mvprintw(15, 0, &format!("score: {}", self.score));
         Ok(())
     }
     fn run(&mut self) -> Result<(), Box<dyn Error>> {
         let mut line_cycle = (0..self.world.road.len()).cycle();
-        self.enemy.lin = line_cycle.next().unwrap() as i32;
+        self.enemy.lin = line_cycle.next().unwrap();
         self.draw_road()?;
         loop {
             match getch() {
-                KEY_LEFT => {
-                    self.player.col = if self.player.col <= 1 {
-                        1
-                    } else {
-                        self.player.col - 1
-                    }
-                }
-                KEY_RIGHT => {
-                    self.player.col = if self.player.col >= 3 {
-                        3
-                    } else {
-                        self.player.col + 1
-                    }
-                }
+                KEY_LEFT => self.player.move_position(KEY_LEFT),
+                KEY_RIGHT => self.player.move_position(KEY_RIGHT),
                 KEY_F4 => break,
                 _ => {}
             }
             if !self.is_alive {
                 break;
             }
-            self.enemy_line = line_cycle.next().unwrap() as i32;
+            self.enemy_line = line_cycle.next().unwrap();
             self.update()?;
             self.draw_road()?;
         }
@@ -182,7 +172,7 @@ impl<'a, 'b, 'c> GameState<'a, 'b, 'c> {
 fn main() -> Result<(), Box<dyn Error>> {
     initscr();
     raw();
-    timeout(50);
+    timeout(100);
     // allow for extended keyboard
     keypad(stdscr(), true);
 
