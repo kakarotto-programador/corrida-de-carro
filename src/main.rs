@@ -135,7 +135,7 @@ impl<'a, 'b, 'c> GameState<'a, 'b, 'c> {
             self.enemy.col = self.rng.gen_range(1, 4);
         }
         self.is_alive = self.player.is_alive;
-        if self.enemy_line == self.world.road.len() && self.is_alive {
+        if self.enemy_line == self.world.road.len() - 1 && self.is_alive {
             self.score += 1
         }
         mvprintw(15, 0, &format!("score: {}", self.score));
